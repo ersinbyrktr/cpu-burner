@@ -1,0 +1,63 @@
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-burner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cpu-burner
+  template:
+    metadata:
+      labels:
+        app: cpu-burner
+    spec:
+      imagePullSecrets:
+        - name: artifact-pull-secret
+      nodeSelector:
+        iam.gke.io/gke-metadata-server-enabled: "true"
+      serviceAccountName: k8s-image-puller
+      containers:
+      - name: cpu-burner
+        image: europe-docker.pkg.dev/diagram-gen-ai/docker-repo/cpu-burner:latest
+        resources:
+          requests:
+            cpu: "500m"
+          limits:
+            cpu: "500m"
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cpu-burner
+spec:
+  selector:
+    app: cpu-burner
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer
+---
+# hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cpu-burner-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cpu-burner
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
