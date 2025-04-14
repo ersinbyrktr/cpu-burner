@@ -1,6 +1,33 @@
 import time
-
+from google.auth import default
 from google.cloud import monitoring_v3
+from googleapiclient import discovery
+
+
+def fetch_gcp_resources(project_id: str) -> dict:
+    """
+    Fetch a subset of common GCP resources in a project.
+    Requires the necessary permissions for each API.
+    """
+    credentials, _ = default()
+    resources = {}
+
+    # 1. GKE Clusters
+    container = discovery.build("container", "v1", credentials=credentials)
+    clusters = []
+    parent = f"projects/{project_id}/locations/-"
+    try:
+        response = container.projects().locations().clusters().list(parent=parent).execute()
+        clusters = response.get("clusters", [])
+    except Exception as e:
+        print(f"Failed to fetch GKE clusters: {e}")
+    resources["gke_clusters"] = clusters
+
+    # 2. Storage Buckets
+    storage = discovery.build('storage', 'v1', credentials=credentials)
+    buckets = storage.buckets().list(project=project_id).execute()
+    resources['storage_buckets'] = buckets.get('items', [])
+    return resources
 
 
 def fetch_k8s_node_cpu_allocatable(project_id):
@@ -47,4 +74,11 @@ def fetch_k8s_node_cpu_allocatable(project_id):
 
 
 # Replace with your actual project ID
-fetch_k8s_node_cpu_allocatable("diagram-gen-ai")
+if __name__ == "__main__":
+    project_id = "diagram-gen-ai"
+    all_resources = fetch_gcp_resources(project_id)
+    for key, items in all_resources.items():
+        print(f"\n--- {key.upper()} ---")
+        for item in items:
+            print(item['name'])
+    # fetch_k8s_node_cpu_allocatable("diagram-gen-ai")
